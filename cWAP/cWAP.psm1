@@ -8,6 +8,76 @@ enum ExternalPreauthentication {
     ADFS
 }
 
+Function Test-sslBinding {
+    [CmdletBinding()]
+    param(
+        [String]
+        $bindingName,
+        [String]
+        $certificateThumbprint,
+        [UInt16]
+        $port
+    )
+
+    $binding = $null
+    $lineNum = 0
+    $certificates = @()
+    netsh http show sslcert | ForEach-Object {
+        $lineNum ++
+        
+        if( -not ($_.Trim()) -and $binding )
+        {
+            $certificates += $binding
+            $binding = $null
+        }
+        
+        if( $_ -notmatch '^ (.*)\s+: (.*)$' )
+        {
+            return
+        }
+
+        $name = $matches[1].Trim()
+        $value = $matches[2].Trim()
+
+        if( $name -eq 'IP:port' )
+        {
+            $binding = @{}
+            $name = "IPPort"
+            if( $value -notmatch '^(.*):(\d+)$' )
+            {
+                Write-Verbose 'Invalid IP address/port in netsh output: {0}.' -f $value
+            }
+            else
+            {
+                $binding['IPAddress'] = $matches[1]
+                $binding['Port'] = $matches[2]
+            }                
+        }
+        if( $value -eq '(null)' )
+        {
+            $value = $null
+        }
+        elseif( $value -eq 'Enabled' )
+        {
+            $value = $true
+        }
+        elseif( $value -eq 'Disabled' )
+        {
+            $value = $false
+        }
+        
+        $binding[$name] = $value
+    }
+
+    $checkBinding = $false
+    $certificates | ForEach-Object{
+        if(($_.Port -eq $port) -and ($_.Hash -eq $certificateThumbprint) -and ($_.IPAddress -eq $bindingName)){
+            $checkBinding = $true
+        }
+    }
+
+    return $checkBinding
+}
 
 [DscResource()]
 class cWAPWebsite {
@@ -135,6 +205,10 @@ class cWAPWebsite {
                 Write-Verbose -Message
                 $Compliant = $false
             }
+        }
+
+        if($Compliant){
+            $Compliant = Test-sslBinding -bindingName $this.DisplayName -certificateThumbprint $Properties.ExternalCertificateThumbprint -port 443
         }
 
         if($Compliant){

@@ -1,7 +1,7 @@
 Describe 'cWAP Manifest' {
     
     $ModuleName   = "cWAP"
-    $ManifestPath = "$PSScriptRoot\..\$ModuleName.psd1"
+    $ManifestPath = "$PSScriptRoot\..\$ModuleName\$ModuleName.psd1"
 
     Context 'Validation' {
 
