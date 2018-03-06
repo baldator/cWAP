@@ -1,4 +1,6 @@
 # cWAP :: Web Application Proxy DSC Resources
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Build status](https://ci.appveyor.com/api/projects/status/gbqt5h9mat4124vr?svg=true)](https://ci.appveyor.com/project/baldator/poshstache
 This repository contains the cWAP PowerShell module, containing Microsoft Windows PowerShell Desired State Configuration (DSC) resources to manage Web Application Proxy (WAP).
 
 # Installation
