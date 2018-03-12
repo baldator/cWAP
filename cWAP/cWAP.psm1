@@ -8,6 +8,7 @@ enum ExternalPreauthentication {
     ADFS
 }
 
+
 Function Test-sslBinding {
     [CmdletBinding()]
     param(
@@ -117,12 +118,12 @@ class cWAPWebsite {
     #>
     [DscProperty()]
     [ExternalPreauthentication] $ExternalPreauthentication = "ADFS"
-
+    
     <#
-    The ADFSRelyingPartyID property define the ADFS relying party ID of the application. It is required only if ExternalPreauthentication is ADFS
+    The ADFSRelyingPartyName property define the ADFS relying party name of the application. It is required only if ExternalPreauthentication is ADFS
     #>
     [DscProperty()]
-    [string] $ADFSRelyingPartyID
+    [string] $ADFSRelyingPartyName
 
     <#
     The BackendServerAuthenticationSPN propery define the SPN of the relying party ID. It is required case of not claims aware relying party. 
@@ -183,7 +184,7 @@ class cWAPWebsite {
             }
 
             if($Properties.ExternalPreauthentication -eq "ADFS"){
-                if($this.ADFSRelyingPartyID -ne $Properties.ADFSRelyingPartyID){
+                if($this.ADFSRelyingPartyName -ne $Properties.ADFSRelyingPartyName){
                     $Compliant = $false
                 }
             }
@@ -235,15 +236,16 @@ class cWAPWebsite {
             $WapWebsiteInfo = @{
                 Name                            = $this.DisplayName
                 ExternalUrl                     = $this.ExternalUrl
-                ExternalCertificateThumbprint   = $this.ExternalCertificateThumbprint 
+                ExternalCertificateThumbprint   = $this.ExternalCertificateThumbprint
                 BackendServerUrl                = $this.BackendServerUrl
                 ExternalPreauthentication       = $this.ExternalPreauthentication
                 EnableHTTPRedirect              = $this.EnableHTTPRedirect
             }
 
             if ($this.ExternalPreauthentication -eq "ADFS") {
-                $ADFSRelyingPartyName = Get-ADFSRelyingPartyName $this.ADFSRelyingPartyID
-                $WapWebsiteInfo.Add('ADFSRelyingPartyName', $ADFSRelyingPartyName)
+                if($this.ADFSRelyingPartyName){
+                    $WapWebsiteInfo.Add('ADFSRelyingPartyName', $this.ADFSRelyingPartyName)
+                }
             }
             elseif ($this.BackendServerAuthenticationSPN) {
                 $WapWebsiteInfo.Add('BackendServerAuthenticationSPN', $this.BackendServerAuthenticationSPN)
@@ -270,3 +272,148 @@ class cWAPWebsite {
     }
 }
 #endregion
+
+
+[DscResource()]
+class cWAPConfiguration
+{
+    ### Determines whether or not the WAP Config should exist.
+    [DscProperty()]
+    [Ensure] $Ensure
+
+	<#
+    The FederationServiceName property is the name of the Active Directory Federation Services (ADFS) service. For example: adfs-service.contoso.com.
+    #>
+    [DscProperty(key)]
+    [string] $FederationServiceName
+
+	<#
+    The Credential property is a PSCredential that represents the username/password of an Active Directory user account that is a member of
+    the Domain Administrators security group. This account will be used to add a new proxy to Active Directory Federation Services (ADFS).
+    #>
+    [DscProperty(Mandatory)]
+    [pscredential] $Credential
+
+    <#
+    The CertificateThumbprint property is the thumbprint of the certificate, located in the local computer's certificate store, that will be bound to the 
+    Active Directory Federation Service (ADFS) farm.
+    #>
+    [DscProperty(Mandatory)]
+    [string] $CertificateThumbprint
+
+	[cWAPConfiguration] Get()
+	{
+		Write-Verbose -Message 'Starting retrieving Web Applucation Proxy configuration.'
+
+        try {
+            $cWAPConfiguration=Get-WebApplicationProxyConfiguration -ErrorAction Stop
+        }
+        catch {
+            Write-Verbose -Message ('Error occurred while retrieving Web Application Proxy configuration: {0}' -f $global:Error[0].Exception.Message)
+        }
+
+        Write-Verbose -Message 'Finished retrieving Web Applucation Proxy configuration.'
+        return $this
+
+	}
+
+	[void] Set()
+	{
+        ### If WAP shoud be present, then go ahead and configure it.
+        if ($this.Ensure -eq [Ensure]::Present) {
+            try{
+                $WapConfiguration = Get-WebApplicationProxyConfiguration -ErrorAction Stop
+            }
+            catch {
+                $WapConfiguration = $false
+            }
+
+            if (!$WapConfiguration) {
+                Write-Verbose -Message 'Configuring Web Application Proxy.'
+                $WapSettings = @{
+                    FederationServiceTrustCredential = $this.Credential
+                    CertificateThumbprint = $this.CertificateThumbprint
+                    FederationServiceName = $this.FederationServiceName
+                }
+                Install-WebApplicationProxy @WapSettings
+            }
+
+            if ($WapConfiguration) {
+                #Check certificate configuration
+                $updateCertificates = $false
+                try{
+                    $certificates = Get-WebApplicationProxySslCertificate
+                    $certificates | ForEach-Object {
+                        if($_.CertificateHash -ne $this.CertificateThumbprint){
+                            $updateCertificates = $true
+                        }
+                    }
+                }
+                catch{
+                    $updateCertificates = $true
+                }
+               
+
+                if($updateCertificates){
+                    Set-WebApplicationProxySslCertificate -Thumbprint $this.CertificateThumbprint
+                }
+            }
+        }
+
+        if ($this.Ensure -eq [Ensure]::Absent) {
+            # It is not actually possible to unconfigure WAP, so we do nothing
+
+        }
+
+        return
+	}
+
+	[bool] Test()
+	{
+        # Assume compliance by default
+        $Compliant = $true
+
+
+        Write-Verbose -Message 'Testing for presence of Web Application Proxy.'
+
+        try {
+            $WapConfiguration = Get-WebApplicationProxyConfiguration -ErrorAction Stop
+        }
+        catch {
+            $Compliant = $false
+            return $Compliant
+        }
+
+        if ($this.Ensure -eq 'Present') {
+            Write-Verbose -Message 'Checking for correct ADFS service configuration.'
+			
+            if (-not($WapConfiguration.ADFSUrl.ToLower() -contains $this.FederationServiceName.ToLower())) {
+                Write-Verbose -Message 'ADFS Service Name doesn''t match the desired state.'
+                $Compliant = $false
+            }
+
+            try{
+                $certificates = Get-WebApplicationProxySslCertificate
+                $certificates | ForEach-Object {
+                    if($_.CertificateHash -ne $this.CertificateThumbprint){
+                        $Compliant = $false
+                    }
+                }
+            }
+            catch{
+                $Compliant = $false
+            }
+        }
+
+        if ($this.Ensure -eq 'Absent') {
+            Write-Verbose -Message 'Checking for absence of WAP Configuration.'
+            if ($WapConfiguration) {
+                Write-Verbose -Message
+                $Compliant = $false
+            }
+        }
+
+        return $Compliant
+	}
+
+}
