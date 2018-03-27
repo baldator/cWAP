@@ -8,6 +8,21 @@ enum ExternalPreauthentication {
     ADFS
 }
 
+enum BackendServerAuthenticationModeValues {
+    NoAuthentication
+    IntegratedWindowsAuthentication
+}
+
+enum BackendServerCertificateValidationValues {
+    None
+    ValidateCertificate
+}
+
+enum ClientCertificateAuthenticationBindingModeValues {
+    None
+    ValidateCertificate
+}
+
 
 Function Test-sslBinding {
     [CmdletBinding()]
@@ -40,7 +55,7 @@ Function Test-sslBinding {
         $name = $matches[1].Trim()
         $value = $matches[2].Trim()
 
-        if( $name -eq 'IP:port' )
+        if( $name -eq 'IP:port'  -or $name -eq 'Hostname:port' )
         {
             $binding = @{}
             $name = "IPPort"
@@ -131,18 +146,85 @@ class cWAPWebsite {
     [DscProperty()]
     [string] $BackendServerAuthenticationSPN
 
+    <#
+    Specifies the authentication method that Web Application Proxy uses when it contacts the backend server. The acceptable values for this parameter are: NoAuthentication and IntegratedWindowsAuthentication.
+    #>
+    [DscProperty()]
+    [BackendServerAuthenticationModeValues]$BackendServerAuthenticationMode
+
+    <#
+    Specifies whether Web Application Proxy validates the certificate that the backend server presents.
+    #>
+    [DscProperty()]
+    [BackendServerCertificateValidationValues]$BackendServerCertificateValidation
+
+    <#
+    Specifies whether Web Application Proxy verifies whether the certificate that authenticates the federation server authenticates future requests. 
+    #>
+    [DscProperty()]
+    [ClientCertificateAuthenticationBindingModeValues]$ClientCertificateAuthenticationBindingMode
+
+    <#
+    Indicates that this cmdlet disables the use of the HttpOnly flag when Web Application Proxy sets the access cookie. The access cookie provides single sign-on access to an application.
+    #>
+    [DscProperty()]
+    [bool]$DisableHttpOnlyCookieProtection
+
+    <#
+    Indicates that Web Application Proxy does not translate HTTP host headers from public host headers to internal host headers when it forwards the request to the published application.
+    #>
+    [DscProperty()]
+    [bool]$DisableTranslateUrlInRequestHeaders
+
+    <#
+    Indicates that Web Application Proxy does not translate internal host names to public host names in Content-Location, Location, and Set-Cookie response headers in redirect responses.
+    #>
+    [DscProperty()]
+    [bool]$DisableTranslateUrlInResponseHeaders
+
+    <#
+    Indicates that this cmdlet enables HTTP redirect for Web Application Proxy.
+    #>
+    [DscProperty()]
+    [bool]$EnableHTTPRedirect
+
+    <#
+    Indicates whether to enable sign out for Web Application Proxy.
+    #>
+    [DscProperty()]
+    [bool]$EnableSignOut
+
+    <#
+    Specifies the length of time, in seconds, until Web Application Proxy closes incomplete HTTP transactions.
+    #>
+    [DscProperty()]
+    [int]$InactiveTransactionsTimeoutSec
+
+    <#
+    Specifies the expiration time, in seconds, for persistent access cookies.
+    #>
+    [DscProperty()]
+    [int]$PersistentAccessCookieExpirationTimeSec
+
+    <#
+    Indicates whether to enable sign out for Web Application Proxy.
+    #>
+    [DscProperty()]
+    [bool]$UseOAuthAuthentication
+
+
     [cWAPWebsite] Get() {
 
-        Write-Verbose -Message 'Starting retrieving configuration for website {0}' -f $this.DisplayName
+        Write-Verbose -Message 'Starting retrieving configuration for website'
 
         try {
             Get-WebApplicationProxyApplication $this.DisplayName -ErrorAction Stop
         }
         catch {
-            Write-Verbose -Message ('Error occurred while retrieving website configuration: {0}' -f $global:Error[0].Exception.Message)
+            Write-Verbose -Message ('Error occurred while retrieving website configuration')
         }
 
-        Write-Verbose -Message 'Finished retrieving configuration for website {0}' -f $this.DisplayName
+        Write-Verbose -Message 'Finished retrieving configuration for website'
         return $this
     }
 
@@ -151,7 +233,7 @@ class cWAPWebsite {
         $Compliant = $true
 
 
-        Write-Verbose -Message 'Testing for presence of WAP website {0}' -f $this.DisplayName
+        Write-Verbose -Message 'Testing for presence of WAP website'
 
         try {
             $Properties = Get-WebApplicationProxyApplication $this.DisplayName -ErrorAction Stop
@@ -160,43 +242,95 @@ class cWAPWebsite {
             $Compliant = $false
             return $Compliant
         }
+        
 
         if ($this.Ensure -eq 'Present') {
-            Write-Verbose -Message 'Checking for presence of WAP website.'
-            if ($this.DisplayName -ne $Properties.Name){
+            Write-Verbose -Message 'Checking for configuration of WAP website.'
+            if($Properties -eq $null){
                 $Compliant = $false
             }
+            else{
+                if ($this.DisplayName -ne $Properties.Name){
+                    $Compliant = $false
+                }
+    
+                if($this.BackendServerUrl -ne $Properties.BackendServerUrl){
+                    $Compliant = $false
+                }
+    
+                if($this.ExternalCertificateThumbprint -ne $Properties.ExternalCertificateThumbprint){
+                    $Compliant = $false
+                }
+                
+                if($this.ExternalUrl -ne $Properties.ExternalUrl){
+                    $Compliant = $false
+                }
+    
+                if($this.ExternalPreauthentication -ne $Properties.ExternalPreauthentication){
+                    $Compliant = $false
+                }
+    
+                if($Properties.ExternalPreauthentication -eq "ADFS"){
+                    if($this.ADFSRelyingPartyName -ne $Properties.ADFSRelyingPartyName){
+                        $Compliant = $false
+                    }
+                }
+    
+                if($Properties.BackendServerAuthenticationMode -eq "IntegratedWindowsAuthentication"){
+                    if($this.BackendServerAuthenticationSPN -ne $Properties.BackendServerAuthenticationSPN){
+                        $Compliant = $false
+                    }
+                }   
 
-            if($this.BackendServerUrl -ne $Properties.BackendServerUrl){
-                $Compliant = $false
-            }
+                if($this.BackendServerAuthenticationMode -ne $Properties.BackendServerAuthenticationMode){
+                    $Compliant = $false
+                }
+            
+                if($this.BackendServerCertificateValidation -ne $Properties.BackendServerCertificateValidation){
+                    $Compliant = $false
+                }
+             
+                if($this.ClientCertificateAuthenticationBindingMode -ne $Properties.ClientCertificateAuthenticationBindingMode){
+                    $Compliant = $false
+                }
+             
+                if($this.DisableHttpOnlyCookieProtection -ne $Properties.DisableHttpOnlyCookieProtection){
+                    $Compliant = $false
+                }
+                  
+                if($this.DisableTranslateUrlInRequestHeaders -ne $Properties.DisableTranslateUrlInRequestHeaders){
+                    $Compliant = $false
+                } 
+            
+                if($this.DisableTranslateUrlInResponseHeaders -ne $Properties.DisableTranslateUrlInResponseHeaders){
+                    $Compliant = $false
+                } 
+            
+                if($this.EnableHTTPRedirect -ne $Properties.EnableHTTPRedirect){
+                    $Compliant = $false
+                } 
+                
+                if($this.EnableSignOut -ne $Properties.EnableSignOut){
+                    $Compliant = $false
+                } 
+                
+                if($this.InactiveTransactionsTimeoutSec -ne $Properties.InactiveTransactionsTimeoutSec){
+                    $Compliant = $false
+                } 
+            
+                if($this.PersistentAccessCookieExpirationTimeSec -ne $Properties.PersistentAccessCookieExpirationTimeSec){
+                    $Compliant = $false
+                } 
+            
+                if($this.UseOAuthAuthentication -ne $Properties.UseOAuthAuthentication){
+                    $Compliant = $false
+                } 
 
-            if($this.ExternalCertificateThumbprint -ne $Properties.ExternalCertificateThumbprint){
-                $Compliant = $false
+                Write-Verbose -Message "Current WAP configuration $Properties" 
             }
             
-            if($this.ExternalUrl -ne $Properties.ExternalUrl){
-                $Compliant = $false
-            }
-
-            if($this.ExternalPreauthentication -ne $Properties.ExternalPreauthentication){
-                $Compliant = $false
-            }
-
-            if($Properties.ExternalPreauthentication -eq "ADFS"){
-                if($this.ADFSRelyingPartyName -ne $Properties.ADFSRelyingPartyName){
-                    $Compliant = $false
-                }
-            }
-
-            if($Properties.BackendServerAuthenticationMode -eq "IntegratedWindowsAuthentication"){
-                if($this.BackendServerAuthenticationSPN -ne $Properties.BackendServerAuthenticationSPN){
-                    $Compliant = $false
-                }
-            }
-
             if(!$compliant){
-                Write-Verbose -Message 'WAP website doesn''t match the desired state.'         
+                Write-Verbose -Message 'WAP website does not match the desired state.'         
             }
         }
 
@@ -225,7 +359,7 @@ class cWAPWebsite {
     [void] Set() {
         
         try {
-            $WapWebsite = Get-AdfsProperties -ErrorAction stop
+            $WapWebsite = Get-webapplicationproxyapplication $this.DisplayName -ErrorAction stop
         }
         catch {
             $WapWebsite = $false
@@ -234,17 +368,31 @@ class cWAPWebsite {
         ### If WAP website shoud be present, then go ahead and create it.
         if ($this.Ensure -eq [Ensure]::Present) {
             $WapWebsiteInfo = @{
-                Name                            = $this.DisplayName
-                ExternalUrl                     = $this.ExternalUrl
-                ExternalCertificateThumbprint   = $this.ExternalCertificateThumbprint
-                BackendServerUrl                = $this.BackendServerUrl
-                ExternalPreauthentication       = $this.ExternalPreauthentication
-                EnableHTTPRedirect              = $this.EnableHTTPRedirect
+                Name                                        = $this.DisplayName
+                ExternalUrl                                 = $this.ExternalUrl
+                ExternalCertificateThumbprint               = $this.ExternalCertificateThumbprint
+                BackendServerUrl                            = $this.BackendServerUrl
+                ExternalPreauthentication                   = $this.ExternalPreauthentication
+                EnableHTTPRedirect                          = $this.EnableHTTPRedirect
+                UseOAuthAuthentication                      = $this.UseOAuthAuthentication
+                BackendServerAuthenticationMode             = $this.BackendServerAuthenticationMode
+                BackendServerCertificateValidation          = $this.BackendServerCertificateValidation
+                ClientCertificateAuthenticationBindingMode  = $this.ClientCertificateAuthenticationBindingMode
+                DisableHttpOnlyCookieProtection             = $this.DisableHttpOnlyCookieProtection
+                DisableTranslateUrlInRequestHeaders         = $this.DisableTranslateUrlInRequestHeaders
+                DisableTranslateUrlInResponseHeaders        = $this.DisableTranslateUrlInResponseHeaders
+                EnableSignOut                               = $this.EnableSignOut
+                InactiveTransactionsTimeoutSec              = $this.InactiveTransactionsTimeoutSec
+                PersistentAccessCookieExpirationTimeSec     = $this.PersistentAccessCookieExpirationTimeSec
             }
 
+
+            $recreate = $false
+
             if ($this.ExternalPreauthentication -eq "ADFS") {
-                if($this.ADFSRelyingPartyName){
+                if($this.ADFSRelyingPartyName -and ($this.ADFSRelyingPartyName -eq $WapWebsite.ADFSRelyingPartyName)){
                     $WapWebsiteInfo.Add('ADFSRelyingPartyName', $this.ADFSRelyingPartyName)
+                    $recreate = $true
                 }
             }
             elseif ($this.BackendServerAuthenticationSPN) {
@@ -252,13 +400,18 @@ class cWAPWebsite {
             }
 
             if (!$WapWebsite) {
-                Write-Verbose -Message 'Creating WAP website {0}.' -f $this.DisplayName
+                Write-Verbose -Message 'Creating WAP website'
                 Add-WebApplicationProxyApplication @WapWebsiteInfo
             }
 
-            if ($WapWebsite) {
-                Write-Verbose -Message 'Editing WAP website {0}.' -f $this.DisplayName
+            if ($WapWebsite -and !$recreate) {
+                Write-Verbose -Message 'Editing WAP website'
                 Set-WebApplicationProxyApplication @WapWebsiteInfo
+            }
+            else{
+                Write-Verbose -Message 'Removing and recreating WAP website'
+                Remove-WebApplicationProxyApplication -name $this.DisplayName
+                Add-WebApplicationProxyApplication @WapWebsiteInfo
             }
         }
 
@@ -309,7 +462,7 @@ class cWAPConfiguration
             $cWAPConfiguration=Get-WebApplicationProxyConfiguration -ErrorAction Stop
         }
         catch {
-            Write-Verbose -Message ('Error occurred while retrieving Web Application Proxy configuration: {0}' -f $global:Error[0].Exception.Message)
+            Write-Verbose -Message ('Error occurred while retrieving Web Application Proxy configuration')
         }
 
         Write-Verbose -Message 'Finished retrieving Web Applucation Proxy configuration.'
