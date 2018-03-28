@@ -3,7 +3,7 @@
     RootModule = 'cWAP.psm1'
 
     # Version number of this module.
-    ModuleVersion = '0.1.0.0'
+    ModuleVersion = '0.2.0.0'
 
     # ID used to uniquely identify this module
     GUID = '2be44be7-93cf-4c08-8a63-f2a77823ca6b'
