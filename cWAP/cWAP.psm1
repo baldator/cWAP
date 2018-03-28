@@ -23,6 +23,10 @@ enum ClientCertificateAuthenticationBindingModeValues {
     ValidateCertificate
 }
 
+enum UserIdleTimeoutActionValues {
+    Signout 
+    Reauthenticate
+}
 
 Function Test-sslBinding {
     [CmdletBinding()]
@@ -454,6 +458,45 @@ class cWAPConfiguration
     [DscProperty(Mandatory)]
     [string] $CertificateThumbprint
 
+    <#
+    Specifies the DNS name and port number of an HTTP proxy that this federation server proxy uses to obtain access to the federation service. Specify the value for this parameter in the following format: FQDN:PortNumber.
+    Only configurable at installation time.
+    #>
+    [DscProperty()]
+    [string] $ForwardProxy = ""
+
+    <#
+    Specifies the HTTPS port for the Web Application Proxy server. The default value is 443.
+    Only configurable at installation time.
+    #>
+    [DscProperty()]
+    [int] $HttpsPort = 443
+
+    <#
+    Specifies the port for the TLS client. Web Application Proxy uses this port for user certificate authentication. The default value is 49443.
+    Only configurable at installation time.
+    #>
+    [DscProperty()]
+    [int] $TlsClientPort = 49443
+
+    <#
+    Define the ADFS Token acceptance duration in seconds
+    #>
+    [DscProperty()]
+    [int] $ADFSTokenAcceptanceDurationSec
+
+    <#
+    Define the user idle timeout in second
+    #>
+    [DscProperty()]
+    [int] $UserIdleTimeoutSec
+
+    <#
+    Define the User idle timeout action. Accepted values are: Signout, Reauthenticate
+    #>
+    [DscProperty()]
+    [UserIdleTimeoutActionValues] $UserIdleTimeoutAction
+
 	[cWAPConfiguration] Get()
 	{
 		Write-Verbose -Message 'Starting retrieving Web Applucation Proxy configuration.'
@@ -484,11 +527,44 @@ class cWAPConfiguration
             if (!$WapConfiguration) {
                 Write-Verbose -Message 'Configuring Web Application Proxy.'
                 $WapSettings = @{
-                    FederationServiceTrustCredential = $this.Credential
-                    CertificateThumbprint = $this.CertificateThumbprint
-                    FederationServiceName = $this.FederationServiceName
+                    FederationServiceTrustCredential    = $this.Credential
+                    CertificateThumbprint               = $this.CertificateThumbprint
+                    FederationServiceName               = $this.FederationServiceName
+                    ForwardProxy                        = $this.ForwardProxy
+                    HttpsPort                           = $this.HttpsPort
+                    TlsClientPort                       = $this.TlsClientPort
                 }
+
+                if($this.ForwardProxy -ne $null){
+                    $WapSettings.Add('ForwardProxy', $this.ForwardProxy)
+                }
+
+                if($this.HttpsPort -ne $null){
+                    $WapSettings.Add('HttpsPort', $this.HttpsPort)
+                }
+                
+                if($this.TlsClientPort -ne $null){
+                    $WapSettings.Add('TlsClientPort', $this.TlsClientPort)
+                }
+
                 Install-WebApplicationProxy @WapSettings
+
+                if($this.ADFSTokenAcceptanceDurationSec -ne $null -or $this.UserIdleTimeoutSec -ne $null -or $this.UserIdleTimeoutAction -ne $null){
+                    
+                    if($this.ADFSTokenAcceptanceDurationSec -ne $null){
+                        $WapSettings.Add('ADFSTokenAcceptanceDurationSec', $this.ADFSTokenAcceptanceDurationSec)
+                    }
+                    
+                    if($this.UserIdleTimeoutSec -ne $null){
+                        $WapSettings.Add('UserIdleTimeoutSec', $this.UserIdleTimeoutSec)
+                    }
+
+                    if($this.UserIdleTimeoutAction -ne $null){
+                        $WapSettings.Add('UserIdleTimeoutAction', $this.UserIdleTimeoutAction)
+                    }
+
+                    Set-WebApplicationProxyConfiguration @WapSettings
+                }
             }
 
             if ($WapConfiguration) {
@@ -509,6 +585,24 @@ class cWAPConfiguration
 
                 if($updateCertificates){
                     Set-WebApplicationProxySslCertificate -Thumbprint $this.CertificateThumbprint
+                }
+
+                if($this.ADFSTokenAcceptanceDurationSec -ne $null -or $this.UserIdleTimeoutSec -ne $null -or $this.UserIdleTimeoutAction -ne $null){
+                    $WapSettings = @{}
+
+                    if($this.ADFSTokenAcceptanceDurationSec -ne $null){
+                        $WapSettings.Add('ADFSTokenAcceptanceDurationSec', $this.ADFSTokenAcceptanceDurationSec)
+                    }
+                    
+                    if($this.UserIdleTimeoutSec -ne $null){
+                        $WapSettings.Add('UserIdleTimeoutSec', $this.UserIdleTimeoutSec)
+                    }
+
+                    if($this.UserIdleTimeoutAction -ne $null){
+                        $WapSettings.Add('UserIdleTimeoutAction', $this.UserIdleTimeoutAction)
+                    }
+
+                    Set-WebApplicationProxyConfiguration @WapSettings
                 }
             }
         }
@@ -556,6 +650,19 @@ class cWAPConfiguration
             catch{
                 $Compliant = $false
             }
+
+            if($this.ADFSTokenAcceptanceDurationSec -ne $WapConfiguration.ADFSTokenAcceptanceDurationSec){
+                $Compliant = $false
+            }
+            
+            if($this.UserIdleTimeoutSec -ne $WapConfiguration.UserIdleTimeoutSec){
+                $Compliant = $false
+            }
+
+            if($this.UserIdleTimeoutAction -ne $WapConfiguration.UserIdleTimeoutAction){
+                $Compliant = $false
+            }
+
         }
 
         if ($this.Ensure -eq 'Absent') {
