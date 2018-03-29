@@ -95,7 +95,7 @@ PrivateData = @{
     PSData = @{
 
         # Tags applied to this module. These help with module discovery in online galleries.
-        Tags = 'DSC','WAP','Web application proxy','ADFS'
+        Tags = 'DSC','WAP','Webapplicationproxy','ADFS'
 
         # A URL to the license for this module.
         # LicenseUri = ''
