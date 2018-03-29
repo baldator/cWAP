@@ -65,7 +65,7 @@ Function Test-sslBinding {
             $name = "IPPort"
             if( $value -notmatch '^(.*):(\d+)$' )
             {
-                Write-Verbose 'Invalid IP address/port in netsh output: {0}.' -f $value
+                Write-Verbose 'Invalid IP address/port in netsh output.'
             }
             else
             {
@@ -154,19 +154,19 @@ class cWAPWebsite {
     Specifies the authentication method that Web Application Proxy uses when it contacts the backend server. The acceptable values for this parameter are: NoAuthentication and IntegratedWindowsAuthentication.
     #>
     [DscProperty()]
-    [BackendServerAuthenticationModeValues]$BackendServerAuthenticationMode
+    [BackendServerAuthenticationModeValues] $BackendServerAuthenticationMode = "NoAuthentication"
 
     <#
     Specifies whether Web Application Proxy validates the certificate that the backend server presents.
     #>
     [DscProperty()]
-    [BackendServerCertificateValidationValues]$BackendServerCertificateValidation
+    [BackendServerCertificateValidationValues]$BackendServerCertificateValidation = "None"
 
     <#
     Specifies whether Web Application Proxy verifies whether the certificate that authenticates the federation server authenticates future requests. 
     #>
     [DscProperty()]
-    [ClientCertificateAuthenticationBindingModeValues]$ClientCertificateAuthenticationBindingMode
+    [ClientCertificateAuthenticationBindingModeValues]$ClientCertificateAuthenticationBindingMode = "None"
 
     <#
     Indicates that this cmdlet disables the use of the HttpOnly flag when Web Application Proxy sets the access cookie. The access cookie provides single sign-on access to an application.
@@ -379,7 +379,6 @@ class cWAPWebsite {
                 ExternalPreauthentication                   = $this.ExternalPreauthentication
                 EnableHTTPRedirect                          = $this.EnableHTTPRedirect
                 UseOAuthAuthentication                      = $this.UseOAuthAuthentication
-                BackendServerAuthenticationMode             = $this.BackendServerAuthenticationMode
                 BackendServerCertificateValidation          = $this.BackendServerCertificateValidation
                 ClientCertificateAuthenticationBindingMode  = $this.ClientCertificateAuthenticationBindingMode
                 DisableHttpOnlyCookieProtection             = $this.DisableHttpOnlyCookieProtection
@@ -390,13 +389,18 @@ class cWAPWebsite {
                 PersistentAccessCookieExpirationTimeSec     = $this.PersistentAccessCookieExpirationTimeSec
             }
 
-
             $recreate = $false
 
+            if ($this.BackendServerAuthenticationMode){
+                $WapWebsiteInfo.Add('BackendServerAuthenticationMode', $this.BackendServerAuthenticationMode)
+            }
+
             if ($this.ExternalPreauthentication -eq "ADFS") {
-                if($this.ADFSRelyingPartyName -and ($this.ADFSRelyingPartyName -eq $WapWebsite.ADFSRelyingPartyName)){
+                if($this.ADFSRelyingPartyName){
                     $WapWebsiteInfo.Add('ADFSRelyingPartyName', $this.ADFSRelyingPartyName)
-                    $recreate = $true
+                    if($WapWebsite -and ($this.ADFSRelyingPartyName -ne $WapWebsite.ADFSRelyingPartyName)){
+                        $recreate = $true
+                    }
                 }
             }
             elseif ($this.BackendServerAuthenticationSPN) {
