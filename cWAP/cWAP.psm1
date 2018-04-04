@@ -111,9 +111,9 @@ class cWAPWebsite {
     The DisplayName property is the name of the website.
     #>
     [DscProperty(Mandatory)]
-    [string] $DisplayName
+    [string] $ApplicationName
 
-    <#
+	<#
     The BackendServerUrl property is the internal url of the application to be published. 
     #>
     [DscProperty(key)]
@@ -222,7 +222,7 @@ class cWAPWebsite {
         Write-Verbose -Message 'Starting retrieving configuration for website'
 
         try {
-            Get-WebApplicationProxyApplication $this.DisplayName -ErrorAction Stop
+            Get-WebApplicationProxyApplication $this.ApplicationName -ErrorAction Stop
         }
         catch {
             Write-Verbose -Message ('Error occurred while retrieving website configuration')
@@ -240,7 +240,7 @@ class cWAPWebsite {
         Write-Verbose -Message 'Testing for presence of WAP website'
 
         try {
-            $Properties = Get-WebApplicationProxyApplication $this.DisplayName -ErrorAction Stop
+            $Properties = Get-WebApplicationProxyApplication $this.ApplicationName -ErrorAction Stop
         }
         catch {
             $Compliant = $false
@@ -254,7 +254,7 @@ class cWAPWebsite {
                 $Compliant = $false
             }
             else{
-                if ($this.DisplayName -ne $Properties.Name){
+                if ($this.ApplicationName -ne $Properties.Name){
                     $Compliant = $false
                 }
     
@@ -347,7 +347,7 @@ class cWAPWebsite {
         }
 
         if($Compliant){
-            $Compliant = Test-sslBinding -bindingName $this.DisplayName -certificateThumbprint $Properties.ExternalCertificateThumbprint -port 443
+            $Compliant = Test-sslBinding -bindingName $this.ApplicationName -certificateThumbprint $Properties.ExternalCertificateThumbprint -port 443
         }
 
         if($Compliant){
@@ -363,7 +363,7 @@ class cWAPWebsite {
     [void] Set() {
         
         try {
-            $WapWebsite = Get-webapplicationproxyapplication $this.DisplayName -ErrorAction stop
+            $WapWebsite = Get-webapplicationproxyapplication $this.ApplicationName -ErrorAction stop
         }
         catch {
             $WapWebsite = $false
@@ -372,11 +372,10 @@ class cWAPWebsite {
         ### If WAP website shoud be present, then go ahead and create it.
         if ($this.Ensure -eq [Ensure]::Present) {
             $WapWebsiteInfo = @{
-                Name                                        = $this.DisplayName
+                Name                                        = $this.ApplicationName
                 ExternalUrl                                 = $this.ExternalUrl
                 ExternalCertificateThumbprint               = $this.ExternalCertificateThumbprint
                 BackendServerUrl                            = $this.BackendServerUrl
-                ExternalPreauthentication                   = $this.ExternalPreauthentication
                 EnableHTTPRedirect                          = $this.EnableHTTPRedirect
                 UseOAuthAuthentication                      = $this.UseOAuthAuthentication
                 BackendServerCertificateValidation          = $this.BackendServerCertificateValidation
@@ -395,6 +394,13 @@ class cWAPWebsite {
                 $WapWebsiteInfo.Add('BackendServerAuthenticationMode', $this.BackendServerAuthenticationMode)
             }
 
+			if($WapWebsite){
+				if($this.ExternalPreauthentication -ne $WapWebsite){
+					$WapWebsiteInfo.Add('ExternalPreauthentication', $this.ExternalPreauthentication)
+                    $recreate = $true
+				}
+			}
+			
             if ($this.ExternalPreauthentication -eq "ADFS") {
                 if($this.ADFSRelyingPartyName){
                     $WapWebsiteInfo.Add('ADFSRelyingPartyName', $this.ADFSRelyingPartyName)
@@ -407,7 +413,8 @@ class cWAPWebsite {
                 $WapWebsiteInfo.Add('BackendServerAuthenticationSPN', $this.BackendServerAuthenticationSPN)
             }
 
-            if (!$WapWebsite) {
+            if (!$WapWebsite){
+                $WapWebsiteInfo.Add('ExternalPreauthentication', $this.ExternalPreauthentication)
                 Write-Verbose -Message 'Creating WAP website'
                 Add-WebApplicationProxyApplication @WapWebsiteInfo
             }
@@ -418,14 +425,14 @@ class cWAPWebsite {
             }
             else{
                 Write-Verbose -Message 'Removing and recreating WAP website'
-                Remove-WebApplicationProxyApplication -name $this.DisplayName
+                Remove-WebApplicationProxyApplication -name $this.ApplicationName
                 Add-WebApplicationProxyApplication @WapWebsiteInfo
             }
         }
 
         if ($this.Ensure -eq [Ensure]::Absent) {
             if($WapWebsite){
-                Remove-WebApplicationProxyApplication -name $this.DisplayName
+                Remove-WebApplicationProxyApplication -name $this.ApplicationName
             }
         }
 
