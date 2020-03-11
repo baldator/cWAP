@@ -541,9 +541,6 @@ class cWAPConfiguration
                     FederationServiceTrustCredential    = $this.Credential
                     CertificateThumbprint               = $this.CertificateThumbprint
                     FederationServiceName               = $this.FederationServiceName
-                    ForwardProxy                        = $this.ForwardProxy
-                    HttpsPort                           = $this.HttpsPort
-                    TlsClientPort                       = $this.TlsClientPort
                 }
 
                 if($this.ForwardProxy -ne $null){
